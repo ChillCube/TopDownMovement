@@ -309,3 +309,4 @@ func _sync_stop_dashing():
 		return
 	is_dashing = false
 	emit_signal("stopped_dashing")
+
