@@ -1,3 +1,4 @@
+@icon("res://addons/TopDownMovement/icon_move.png")
 extends Node
 class_name TopDownMovement
 
@@ -9,7 +10,7 @@ signal used_a_dash(dashes_left : int, dashes_used : int, max_dashes : int)
 signal stopped_dashing
 
 signal knocked_back(direction : Vector2, strength : float)
-signal knockback_stopped
+signal knokockback_stopped
 
 signal moving_up
 signal moving_down
@@ -102,7 +103,7 @@ func _physics_process(delta: float):
 	# Only the authority processes movement
 	if _is_in_multiplayer and not _is_network_authority:
 		return
-	
+
 	# Process dash request if any
 	if _has_dash_request and enable_dashing:
 		_try_dash_internal(_requested_dash_direction)
@@ -309,4 +310,3 @@ func _sync_stop_dashing():
 		return
 	is_dashing = false
 	emit_signal("stopped_dashing")
-

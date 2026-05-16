@@ -11,8 +11,6 @@ To add this to your project, copy paste these commands into terminal at the root
 ```bash
 clone-gd-addon https://github.com/ChillCube/TopDownMovement.git
 ```
-> [!IMPORTANT]
-> Make sure to enable the addon, including its dependencies in the project settings!
 
 ## Documentation
 You can find the documentation at: https://github.com/ChillCube/TopDownMovement/blob/main/DOCUMENTATION.md
@@ -34,6 +32,7 @@ push-all-addons
 
 
 ## Used By
-1 other ChillCube addon(s) depend on this:
+2 other ChillCube addon(s) depend on this:
 
 - [Godot_TopDown_Character_Controller](https://github.com/ChillCube/Godot_TopDown_Character_Controller)
+- [HuntingBehaviour](https://github.com/ChillCube/HuntingBehaviour)
