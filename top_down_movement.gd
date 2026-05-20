@@ -17,26 +17,26 @@ signal moving_down
 signal moving_left
 signal moving_right
 
-@export var speed : float = 500
-@export_range(0, 1) var acceleration : float = 1
-@export_range(0, 1) var deceleration : float = 0.1
+@export var speed : float = 500 ## Maximum movement speed in pixels/sec
+@export_range(0, 1) var acceleration : float = 1 ## Ramp-up rate (1 = instant, 0 = never accelerates)
+@export_range(0, 1) var deceleration : float = 0.1 ## Ramp-down rate (1 = instant stop)
 
 @export_group("Dash")
-@export var enable_dashing : bool = true
-@export var dash_speed : float = 5
-@export var dash_time : float = 0.5
-@export_range(0, 1) var dash_falloff : float = 0.3
-@export var dash_timeout : float = 0.5
-@export var dashes : int = 1
+@export var enable_dashing : bool = true ## Allow the dash mechanic
+@export var dash_speed : float = 5 ## Speed multiplier during a dash
+@export var dash_time : float = 0.5 ## Duration in seconds of each dash
+@export_range(0, 1) var dash_falloff : float = 0.3 ## How quickly dash velocity decays after the timer ends
+@export var dash_timeout : float = 0.5 ## Cooldown in seconds between dashes
+@export var dashes : int = 1 ## Number of dashes available before the timeout resets the counter
 
 @export_group("Knockback")
-@export var enable_knockback : bool = true
-@export var knockback_speed : float = 5
-@export var knockback_time : float = 0.5
-@export_range(0, 1) var knockback_falloff : float = 0.3
+@export var enable_knockback : bool = true ## Allow knockback to be applied via request_knockback()
+@export var knockback_speed : float = 5 ## Speed multiplier for knockback impulse
+@export var knockback_time : float = 0.5 ## Duration in seconds the knockback force is applied
+@export_range(0, 1) var knockback_falloff : float = 0.3 ## How quickly knockback velocity decays after the timer ends
 
 @export_group("Multiplayer")
-@export_range(1.0, 30.0, 0.5) var remote_lerp_speed : float = 15.0
+@export_range(1.0, 30.0, 0.5) var remote_lerp_speed : float = 15.0 ## Lerp speed used to smooth remote player positions on non-authority clients
 
 # Internal movement vars
 var dashes_used : int = 0
@@ -147,7 +147,7 @@ func _physics_process(delta: float):
 		_update_remote_position.rpc(parent.position)
 
 # Public API - These can be called from anywhere (PlayerInput, AI, StateMachine)
-func request_movement(direction: Vector2):
+func request_movement(direction: Vector2): ## Public API: submit a movement direction; routes to authority via RPC in multiplayer
 	if not _is_network_authority:
 		# Send to authority if we're not it
 		if _is_in_multiplayer:
@@ -157,7 +157,7 @@ func request_movement(direction: Vector2):
 	# Authority processes movement directly
 	_requested_movement_direction = direction.normalized() if direction != Vector2.ZERO else Vector2.ZERO
 
-func request_dash(direction: Vector2):
+func request_dash(direction: Vector2): ## Public API: trigger a dash in the given direction; routes to authority via RPC in multiplayer
 	if not enable_dashing:
 		return
 	
@@ -171,7 +171,7 @@ func request_dash(direction: Vector2):
 	_requested_dash_direction = direction
 	_has_dash_request = true
 
-func request_knockback(direction: Vector2, strength: float):
+func request_knockback(direction: Vector2, strength: float): ## Public API: apply a knockback impulse; routes to authority via RPC in multiplayer
 	if not enable_knockback:
 		return
 	
