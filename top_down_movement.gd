@@ -10,7 +10,7 @@ signal used_a_dash(dashes_left : int, dashes_used : int, max_dashes : int)
 signal stopped_dashing
 
 signal knocked_back(direction : Vector2, strength : float)
-signal knokockback_stopped
+signal knockback_stopped  # Fixed typo
 
 signal moving_up
 signal moving_down
@@ -18,21 +18,21 @@ signal moving_left
 signal moving_right
 
 @export var speed : float = 500 ## Maximum movement speed in pixels/sec
-@export_range(0, 1) var acceleration : float = 1 ## Ramp-up rate (1 = instant, 0 = never accelerates)
-@export_range(0, 1) var deceleration : float = 0.1 ## Ramp-down rate (1 = instant stop)
+@export_range(0, 1) var acceleration : float = 0.2 ## Ramp-up rate (1 = instant, 0 = never accelerates)
+@export_range(0, 1) var deceleration : float = 0.2 ## Ramp-down rate (1 = instant stop)
 
 @export_group("Dash")
 @export var enable_dashing : bool = true ## Allow the dash mechanic
-@export var dash_speed : float = 5 ## Speed multiplier during a dash
-@export var dash_time : float = 0.5 ## Duration in seconds of each dash
+@export var dash_speed : float = 3.0 ## Speed multiplier during a dash
+@export var dash_time : float = 0.2 ## Duration in seconds of each dash
 @export_range(0, 1) var dash_falloff : float = 0.3 ## How quickly dash velocity decays after the timer ends
 @export var dash_timeout : float = 0.5 ## Cooldown in seconds between dashes
 @export var dashes : int = 1 ## Number of dashes available before the timeout resets the counter
 
 @export_group("Knockback")
 @export var enable_knockback : bool = true ## Allow knockback to be applied via request_knockback()
-@export var knockback_speed : float = 5 ## Speed multiplier for knockback impulse
-@export var knockback_time : float = 0.5 ## Duration in seconds the knockback force is applied
+@export var knockback_speed : float = 3.0 ## Speed multiplier for knockback impulse
+@export var knockback_time : float = 0.3 ## Duration in seconds the knockback force is applied
 @export_range(0, 1) var knockback_falloff : float = 0.3 ## How quickly knockback velocity decays after the timer ends
 
 @export_group("Multiplayer")
@@ -49,9 +49,9 @@ var dash_timer_start : float = 0.0
 var knockback_timer_start : float = 0.0
 
 # Timers
-@onready var dash_timer : SceneTreeTimer = get_tree().create_timer(0)
-@onready var dash_timeout_timer : SceneTreeTimer = get_tree().create_timer(0)
-@onready var knockback_timer : SceneTreeTimer = get_tree().create_timer(0)
+var dash_timer : SceneTreeTimer = null
+var dash_timeout_timer : SceneTreeTimer = null
+var knockback_timer : SceneTreeTimer = null
 
 # Public API for movement input (can be called by anyone, but may be rejected)
 var _requested_movement_direction : Vector2 = Vector2.ZERO
@@ -65,6 +65,7 @@ var parent : CharacterBody2D
 var _is_network_authority : bool = true
 var _net_position : Vector2 = Vector2.ZERO
 var _is_in_multiplayer : bool = false
+var _was_moving_last_frame : bool = false
 
 func _ready():
 	parent = get_parent() as CharacterBody2D
@@ -110,37 +111,65 @@ func _physics_process(delta: float):
 		_has_dash_request = false
 		_requested_dash_direction = Vector2.ZERO
 	
-	# Process movement
-	var max_speed = speed
+	# Process dash and knockback states
+	_process_dash(delta)
+	_process_knockback(delta)
+	
+	# Get input direction
 	var input_vector = _requested_movement_direction if _requested_movement_direction != Vector2.ZERO else Vector2.ZERO
 	
-	# Process dash state
-	_process_dash(delta)
+	# Calculate target velocity based on input
+	var target_velocity = input_vector * speed
 	
-	# Movement calculation
-	var max_speed_vector = input_vector * max_speed 
-	var deceleration_vector = (Vector2.ZERO - speed_vector) * deceleration
-	var acceleration_vector : Vector2
+	# Apply acceleration or deceleration
+	var is_moving = false
 	
 	if input_vector.length() > 0:
-		acceleration_vector = ((max_speed_vector - speed_vector) * acceleration) + (input_vector * deceleration_vector.length())
+		# Accelerate towards target velocity
+		speed_vector = speed_vector.lerp(target_velocity, acceleration)
+		is_moving = true
 	else:
-		acceleration_vector = Vector2.ZERO
-		if speed_vector.length() < max_speed * 0.1:
-			emit_signal("stopped_moving")
+		# Decelerate to zero when no input
+		if speed_vector.length() > 0:
+			speed_vector = speed_vector.lerp(Vector2.ZERO, deceleration)
+			is_moving = true
+			
+			# Check if we've effectively stopped
+			if speed_vector.length() < 1.0:
+				speed_vector = Vector2.ZERO
+				is_moving = false
+				
+				# Only emit stopped_moving if we were moving before
+				if _was_moving_last_frame:
+					emit_signal("stopped_moving")
+					_was_moving_last_frame = false
+		else:
+			speed_vector = Vector2.ZERO
 	
-	speed_vector += acceleration_vector + deceleration_vector
-	
+	# Combine all velocity components
 	var final_velocity = speed_vector + dash_vector + knockback_vector
 	
+	# Apply movement
 	parent.velocity = final_velocity
 	parent.move_and_slide()
 	
+	# Emit movement signals
 	if final_velocity.length() > 0:
+		if not _was_moving_last_frame:
+			_was_moving_last_frame = true
+		
 		emit_signal("moving", final_velocity)
-		_emit_direction_signals(final_velocity)
-	
-	_process_knockback(delta)
+		
+		# Emit direction signals based on input (for responsiveness)
+		if input_vector.length() > 0:
+			_emit_direction_signals(input_vector)
+		else:
+			# If no input, use velocity for dash/knockback direction
+			_emit_direction_signals(final_velocity)
+	else:
+		if _was_moving_last_frame:
+			_was_moving_last_frame = false
+			emit_signal("stopped_moving")
 	
 	# Broadcast position to remote instances
 	if _is_in_multiplayer and _is_network_authority:
@@ -186,16 +215,22 @@ func request_knockback(direction: Vector2, strength: float): ## Public API: appl
 
 # Internal processing methods (authority only)
 func _try_dash_internal(direction: Vector2):
-	if dash_timeout_timer.time_left < 0.1:
+	# Check if dash timeout has expired
+	if dash_timeout_timer and dash_timeout_timer.time_left < 0.1:
 		dashes_used = 0
 	
 	if dashes_used < dashes:
-		emit_signal("started_dashing", direction)
+		var dash_direction = direction.normalized() if direction != Vector2.ZERO else Vector2.RIGHT
+		
+		emit_signal("started_dashing", dash_direction)
 		emit_signal("used_a_dash", dashes - dashes_used, dashes_used, dashes)
 		
-		dash_vector = direction.normalized() * dash_speed * 200
+		# Apply dash velocity - multiplier of regular speed
+		dash_vector = dash_direction * speed * dash_speed
 		is_dashing = true
 		dash_timer_start = Time.get_ticks_msec() / 1000.0
+		
+		# Create timers
 		dash_timer = get_tree().create_timer(dash_time)
 		dash_timeout_timer = get_tree().create_timer(dash_timeout)
 		dashes_used += 1
@@ -205,8 +240,12 @@ func _try_dash_internal(direction: Vector2):
 			_sync_dash_state.rpc(dash_vector, true, dashes_used, dash_timer_start)
 
 func _try_knockback_internal(direction: Vector2, strength: float):
-	emit_signal("knocked_back", direction, strength)
-	knockback_vector = direction.normalized() * knockback_speed * 200 * strength
+	var knockback_direction = direction.normalized() if direction != Vector2.ZERO else Vector2.ZERO
+	
+	emit_signal("knocked_back", knockback_direction, strength)
+	
+	# Apply knockback velocity - multiplier of regular speed
+	knockback_vector = knockback_direction * speed * knockback_speed * strength
 	is_knocked_back = true
 	knockback_timer_start = Time.get_ticks_msec() / 1000.0
 	knockback_timer = get_tree().create_timer(knockback_time)
@@ -258,6 +297,13 @@ func _sync_knockback_state(kb_vector: Vector2, is_kb: bool):
 	if is_kb:
 		knockback_timer_start = Time.get_ticks_msec() / 1000.0
 
+@rpc("authority", "reliable", "call_local")
+func _sync_stop_dashing():
+	if _is_network_authority:
+		return
+	is_dashing = false
+	emit_signal("stopped_dashing")
+
 @rpc("authority", "reliable")
 func _update_remote_position(new_position: Vector2):
 	if _is_network_authority:
@@ -270,6 +316,7 @@ func _emit_direction_signals(velocity: Vector2):
 	
 	var angle = velocity.angle()
 	
+	# Emit individual direction signals based on the angle
 	if angle >= -PI/4 and angle < PI/4:
 		emit_signal("moving_right")
 	elif angle >= PI/4 and angle < 3 * PI/4:
@@ -283,30 +330,36 @@ func _process_dash(delta: float):
 	if not is_dashing:
 		return
 	
-	var current_time = Time.get_ticks_msec() / 1000.0
-	if current_time - dash_timer_start >= dash_time:
+	# Check if dash timer has expired
+	if dash_timer and dash_timer.time_left <= 0:
 		is_dashing = false
-		dash_vector += (Vector2.ZERO - dash_vector) * dash_falloff
-		if dash_vector.length() < 1:
+		# Apply falloff to dash vector
+		dash_vector = dash_vector.lerp(Vector2.ZERO, dash_falloff)
+		
+		if dash_vector.length() < 1.0:
+			dash_vector = Vector2.ZERO
 			emit_signal("stopped_dashing")
 			if _is_in_multiplayer and _is_network_authority:
 				_sync_stop_dashing.rpc()
+	else:
+		# Apply decay during dash (optional smooth ending)
+		var progress = 1.0 - (dash_timer.time_left / dash_time)
+		if progress > 0.7:  # Start decaying in last 30% of dash
+			var decay_factor = 1.0 - ((progress - 0.7) / 0.3) * 0.5
+			dash_vector = dash_vector * decay_factor
 
 func _process_knockback(delta: float):
 	if not is_knocked_back:
 		return
 	
-	if knockback_timer.time_left < 0.01:
-		knockback_vector += (Vector2.ZERO - knockback_vector) * knockback_falloff
-		if knockback_vector.length() < 0.1:
+	# Check if knockback timer has expired
+	if knockback_timer and knockback_timer.time_left <= 0:
+		# Apply falloff to knockback vector
+		knockback_vector = knockback_vector.lerp(Vector2.ZERO, knockback_falloff)
+		
+		if knockback_vector.length() < 1.0:
+			knockback_vector = Vector2.ZERO
 			is_knocked_back = false
 			emit_signal("knockback_stopped")
 			if _is_in_multiplayer and _is_network_authority:
 				_sync_knockback_state.rpc(Vector2.ZERO, false)
-
-@rpc("authority", "reliable", "call_local")
-func _sync_stop_dashing():
-	if _is_network_authority:
-		return
-	is_dashing = false
-	emit_signal("stopped_dashing")

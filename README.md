@@ -4,32 +4,34 @@ A godot addon used to create top down movement. Can be used for both player char
 
 ## Installation
 
-Make sure to download the ChillCube Developer tools: https://github.com/ChillCube/ChillCube-Developer-Tools.git
+Make sure to download the ChillCube Developer tools to use this addon: https://github.com/ChillCube/ChillCube-Developer-Tools.git
 
-### Using the Godot Plugin
-Enable the **ChillCube Tools** plugin, then paste the repo URL into the Clone tab.
-
-### Linux / CLI
+### Linux
+To add this to your project, copy paste these commands into terminal at the root of your project:
 ```bash
 clone-gd-addon https://github.com/ChillCube/TopDownMovement.git
 ```
 
 ## Documentation
-https://github.com/ChillCube/TopDownMovement/blob/main/DOCUMENTATION.md
+You can find the documentation at: https://github.com/ChillCube/TopDownMovement/blob/main/DOCUMENTATION.md
 
 ## Deinstallation
-Use the CC Tools panel in Godot, or run:
+### Linux
+Run this in the root of your godot project:
 ```bash
 remove-gd-addon TopDownMovement
 ```
 
 ## For Developers
+### Push Changes
+Run this at the root of your directory to push changes to any addons you have:
 ```bash
 push-all-addons
 ```
 
-## Used By
-2 other ChillCube addon(s) depend on this:
 
-- [HuntingBehaviour](https://github.com/ChillCube/HuntingBehaviour)
+
+## Used By
+1 other ChillCube addon(s) depend on this:
+
 - [Godot_TopDown_Character_Controller](https://github.com/ChillCube/Godot_TopDown_Character_Controller)
