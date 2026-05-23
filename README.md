@@ -27,8 +27,3 @@ remove-gd-addon TopDownMovement
 ```bash
 push-all-addons
 ```
-
-## Used By
-1 other ChillCube addon(s) depend on this:
-
-- [Godot_TopDown_Character_Controller](https://github.com/ChillCube/Godot_TopDown_Character_Controller)
