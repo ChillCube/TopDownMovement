@@ -21,6 +21,8 @@ signal moving_right
 @export_range(0, 1) var acceleration : float = 0.2 ## Ramp-up rate (1 = instant, 0 = never accelerates)
 @export_range(0, 1) var deceleration : float = 0.2 ## Ramp-down rate (1 = instant stop)
 
+@export var enable_walking : bool = true ## Allow character movement from input
+
 @export_group("Dash")
 @export var enable_dashing : bool = true ## Allow the dash mechanic
 @export var dash_speed : float = 3.0 ## Speed multiplier during a dash
@@ -117,6 +119,8 @@ func _physics_process(delta: float):
 	
 	# Get input direction
 	var input_vector = _requested_movement_direction if _requested_movement_direction != Vector2.ZERO else Vector2.ZERO
+	if not enable_walking:
+		input_vector = Vector2.ZERO
 	
 	# Calculate target velocity based on input
 	var target_velocity = input_vector * speed
